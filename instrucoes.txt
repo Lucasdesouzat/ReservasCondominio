@@ -1,0 +1,11 @@
+Estrutura de Pacotes:
+
+models: Estruturas de dados e modelos que representam as entidades do seu sistema (como User, Reservation, etc.).
+services: Lógica de negócio e manipulação de dados (CRUD, autenticação, etc.).
+api: Roteamento e configuração de endpoints da API.
+pkg: Utilitários e módulos auxiliares que podem ser reutilizados.
+config: Configurações do projeto, como carregamento de variáveis de ambiente.
+constants (dentro do pkg): Para armazenar todas as constantes do sistema.
+
+----------------------------------------------------------------------------------------------------------------------------
+
