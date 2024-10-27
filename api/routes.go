@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/Lucasdesouzat/ReservasCondominio/handlers"
 	"github.com/Lucasdesouzat/ReservasCondominio/middlewares"
 	"github.com/Lucasdesouzat/ReservasCondominio/pkg/constants"
 	"github.com/Lucasdesouzat/ReservasCondominio/services"
@@ -11,8 +12,8 @@ func SetupRouter() *gin.Engine {
 	router := gin.Default()
 
 	// Rotas públicas (Registro e Login)
-	router.POST("/register", services.RegisterUser)
-	router.POST("/login", services.LoginUser) // <--- Verifique se esta linha está presente
+	router.POST("/register", handlers.RegisterUser) // Usando handlers.RegisterUser
+	router.POST("/login", handlers.LoginHandler)    // Usando handlers.LoginHandler
 
 	// Rota de teste para verificação de saúde do servidor
 	router.GET("/health", func(c *gin.Context) {

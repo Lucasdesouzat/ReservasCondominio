@@ -1,49 +1,51 @@
 package main
 
 import (
-	"github.com/Lucasdesouzat/ReservasCondominio/api"
-	"github.com/Lucasdesouzat/ReservasCondominio/config"
-	"github.com/Lucasdesouzat/ReservasCondominio/database"
 	"log"
-	"net/http"
 	"os"
 
-	"github.com/joho/godotenv"
+	"github.com/Lucasdesouzat/ReservasCondominio/api"
+	"github.com/Lucasdesouzat/ReservasCondominio/database"
+	"github.com/joho/godotenv" // Para carregar o .env
 )
 
 func main() {
-	// Carrega variáveis do arquivo .env
-	err := godotenv.Load()
+	// Log para verificar o diretório atual
+	dir, err := os.Getwd()
 	if err != nil {
-		log.Fatal("Erro ao carregar o arquivo .env")
+		log.Fatal("Erro ao obter o diretório atual:", err)
 	}
+	log.Println("Diretório atual:", dir)
 
-	// Verifica se a variável JWT_SECRET foi carregada
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		log.Fatalf("Erro: a variável JWT_SECRET não está definida no arquivo .env")
+	// Tentando carregar o arquivo .env
+	log.Println("Tentando carregar o arquivo .env...")
+
+	// Carregar variáveis de ambiente do arquivo .env
+	err = godotenv.Load()
+	if err != nil {
+		log.Fatal("Erro ao carregar o arquivo .env:", err)
 	} else {
-		log.Println("JWT_SECRET carregado com sucesso:", jwtSecret)
+		log.Println("Arquivo .env carregado com sucesso")
 	}
 
-	// Testa se a variável DATABASE_URL foi carregada
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		log.Fatal("DATABASE_URL não definida no arquivo .env")
+	// Verifique se o JWT_SECRET está configurado
+	secret := os.Getenv("JWT_SECRET")
+	log.Println("Valor lido de JWT_SECRET:", secret) // Adiciona log para depurar o valor
+	if secret == "" {
+		log.Fatal("Erro: JWT_SECRET não está configurado corretamente")
 	} else {
-		log.Println("Conectando ao banco de dados com a URL:", dbURL)
+		log.Println("JWT_SECRET carregado com sucesso:", secret) // Log para verificar o carregamento
 	}
 
-	// Carrega configurações adicionais
-	config.LoadConfig()
-
-	// Conecta ao banco de dados
+	// Inicializar conexão com o banco de dados
 	database.Connect()
 
-	// Configura as rotas da API
+	// Configurar rotas do servidor usando api.SetupRouter()
 	router := api.SetupRouter()
 
-	// Inicia o servidor
+	// Iniciar o servidor usando a variável 'router'
 	log.Println("Servidor rodando na porta 8080")
-	log.Fatal(http.ListenAndServe(":8080", router))
+	if err := router.Run(":8080"); err != nil {
+		log.Fatal("Erro ao iniciar o servidor:", err)
+	}
 }
