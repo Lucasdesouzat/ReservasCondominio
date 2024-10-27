@@ -12,7 +12,7 @@ type User struct {
 	LastName       string               `json:"last_name" db:"last_name"`
 	CPF            string               `json:"cpf" db:"cpf"`
 	BirthDate      constants.CustomDate `json:"birth_date" db:"birth_date" time_format:"2006-01-02"`
-	ProfilePicture string               `json:"profile_picture" db:"profile_picture"`
+	ProfilePicture *string              `json:"profile_picture" db:"profile_picture"`
 	Phone1         string               `json:"phone_1" db:"phone_1"`
 	Phone2         *string              `json:"phone_2,omitempty" db:"phone_2"`
 	Email          string               `json:"email" db:"email"`
