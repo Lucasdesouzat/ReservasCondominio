@@ -1,13 +1,14 @@
 package services
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v4"
-	"golang.org/x/crypto/bcrypt"
 	"log"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v4"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/Lucasdesouzat/ReservasCondominio/database"
 	"github.com/Lucasdesouzat/ReservasCondominio/models"
@@ -42,8 +43,51 @@ func RegisterUser(c *gin.Context) {
 	}
 	user.Password = string(hashedPassword)
 
+	// Converte o campo BirthDate para time.Time
+	birthDate := user.BirthDate.ToTime()
+
 	// Inserir usuário no banco de dados
-	_, err = database.DB.NamedExec("INSERT INTO users (first_name, last_name, cpf, birth_date, profile_picture, phone_1, phone_2, email, password, role, status, auth_method) VALUES (:first_name, :last_name, :cpf, :birth_date, :profile_picture, :phone_1, :phone_2, :email, :password, :role, :status, :auth_method)", &user)
+	_, err = database.DB.NamedExec(`
+		INSERT INTO users (
+			first_name, 
+			last_name, 
+			cpf, 
+			birth_date, 
+			profile_picture, 
+			phone_1, 
+			phone_2, 
+			email, 
+			password, 
+			role, 
+			status, 
+			auth_method
+		) VALUES (
+			:first_name, 
+			:last_name, 
+			:cpf, 
+			:birth_date, 
+			:profile_picture, 
+			:phone_1, 
+			:phone_2, 
+			:email, 
+			:password, 
+			:role, 
+			:status, 
+			:auth_method
+		)`, map[string]interface{}{
+		"first_name":      user.FirstName,
+		"last_name":       user.LastName,
+		"cpf":             user.CPF,
+		"birth_date":      birthDate,
+		"profile_picture": user.ProfilePicture,
+		"phone_1":         user.Phone1,
+		"phone_2":         user.Phone2,
+		"email":           user.Email,
+		"password":        user.Password,
+		"role":            user.Role,
+		"status":          user.Status,
+		"auth_method":     user.AuthMethod,
+	})
 	if err != nil {
 		log.Println("Erro ao inserir usuário no banco de dados:", err) // Log detalhado
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao registrar usuário"})
