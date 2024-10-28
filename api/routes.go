@@ -28,9 +28,12 @@ func SetupRouter() *gin.Engine {
 	auth.POST("/spaces", middlewares.AuthorizeRole(constants.RoleAdmin), services.CreateSpace)
 	auth.GET("/spaces", middlewares.AuthorizeRole(constants.RoleAdmin), services.GetAllSpaces)
 
-	// Exemplos de rotas para reservas
-	auth.POST("/reservations", middlewares.AuthorizeRole(constants.RoleResident), services.CreateReservation)
-	auth.GET("/reservations", middlewares.AuthorizeRole(constants.RoleResident), services.GetUserReservations)
+	// Exemplos de rotas para reservas (permitindo admin e resident)
+	auth.POST("/reservations", middlewares.AuthorizeRole(constants.RoleAdmin, constants.RoleResident, constants.RoleOwner), services.CreateReservation)
+	auth.GET("/reservations", middlewares.AuthorizeRole(constants.RoleAdmin, constants.RoleResident, constants.RoleOwner), services.GetUserReservations)
+
+	// Rota para cancelar reservas (permitindo admin e owner)
+	auth.POST("/reservations/cancel", middlewares.AuthorizeRole(constants.RoleAdmin, constants.RoleResident, constants.RoleOwner), services.CancelReservation)
 
 	return router
 }
