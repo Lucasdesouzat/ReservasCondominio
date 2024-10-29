@@ -11,16 +11,26 @@ import (
 
 	"github.com/Lucasdesouzat/ReservasCondominio/database"
 	"github.com/Lucasdesouzat/ReservasCondominio/models"
-	// Incluindo utils para funções de validação
 )
 
 // Função que realiza o registro do usuário no banco de dados
 func RegisterUserService(user models.User) error {
+	// Verifica se o CPF já está registrado
+	var existingUser models.User
+	err := database.DB.Get(&existingUser, "SELECT * FROM users WHERE cpf = $1", user.CPF)
+	if err == nil {
+		log.Println("Erro: Usuário já registrado com esse CPF")
+		return errors.New("usuário já registrado com esse CPF")
+	} else if err != nil && err.Error() != "sql: no rows in result set" {
+		log.Println("Erro ao verificar CPF no banco de dados:", err)
+		return err
+	}
+
 	// Converte o campo BirthDate para time.Time
 	birthDate := user.BirthDate.ToTime()
 
 	// Inserir usuário no banco de dados
-	_, err := database.DB.NamedExec(`
+	_, err = database.DB.NamedExec(`
 		INSERT INTO users (
 			first_name, 
 			last_name, 

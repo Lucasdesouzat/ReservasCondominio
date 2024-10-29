@@ -21,24 +21,23 @@ type DadosLogin struct {
 func RegisterUser(c *gin.Context) {
 	var user models.User
 	if err := c.ShouldBindJSON(&user); err != nil {
-		log.Println("Erro ao bindar JSON:", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Dados inválidos"})
+		log.Println("Erro ao bindar JSON para registro:", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dados de registro inválidos"})
 		return
 	}
 
-	// Verificar os dados recebidos
-	log.Printf("Dados recebidos para registro: %+v\n", user)
+	log.Printf("Tentativa de registro com dados: %+v\n", user)
 
 	// Validação do CPF
 	if !utils.ValidarCPF(user.CPF) {
-		log.Println("Erro: CPF inválido")
+		log.Println("CPF inválido:", user.CPF)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "CPF inválido"})
 		return
 	}
 
 	// Validação do Email
 	if !utils.ValidarFormatoEmail(user.Email) {
-		log.Println("Erro: Formato de email inválido")
+		log.Println("Email inválido:", user.Email)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Email inválido"})
 		return
 	}
@@ -50,14 +49,17 @@ func RegisterUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao gerar hash da senha"})
 		return
 	}
-	log.Printf("Hash gerado para a senha: %s", hashedPassword) // Log do hash gerado
 	user.Password = string(hashedPassword)
 
-	// Registrar o usuário no banco de dados usando o serviço apropriado
+	// Registrar o usuário no banco de dados usando o serviço
 	err = services.RegisterUserService(user)
 	if err != nil {
-		log.Println("Erro ao registrar usuário no banco de dados:", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao registrar usuário"})
+		if err.Error() == "usuário já registrado com esse CPF" {
+			c.JSON(http.StatusConflict, gin.H{"error": "Usuário já registrado com este CPF"})
+		} else {
+			log.Println("Erro ao registrar usuário:", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao registrar usuário"})
+		}
 		return
 	}
 
@@ -68,21 +70,20 @@ func RegisterUser(c *gin.Context) {
 func LoginHandler(c *gin.Context) {
 	var dadosLogin DadosLogin
 	if err := c.ShouldBindJSON(&dadosLogin); err != nil {
-		log.Println("Erro ao bindar JSON:", err)
+		log.Println("Erro ao bindar JSON para login:", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Erro ao processar requisição"})
 		return
 	}
 
-	log.Println("Iniciando login para o email:", dadosLogin.Email)
+	log.Println("Tentativa de login para o email:", dadosLogin.Email)
 
 	// Chamar o serviço de autenticação e receber o token
 	token, err := services.LoginService(dadosLogin.Email, dadosLogin.Senha)
 	if err != nil {
-		log.Println("Erro no login:", err)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		log.Println("Erro na autenticação:", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Credenciais inválidas"})
 		return
 	}
 
-	// Resposta de sucesso com o token JWT
 	c.JSON(http.StatusOK, gin.H{"message": "Login realizado com sucesso", "token": token})
 }

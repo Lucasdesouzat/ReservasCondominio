@@ -30,7 +30,7 @@ func SetupRouter() *gin.Engine {
 
 	// Exemplos de rotas para reservas (permitindo admin e resident)
 	auth.POST("/reservations", middlewares.AuthorizeRole(constants.RoleAdmin, constants.RoleResident, constants.RoleOwner), services.CreateReservation)
-	auth.GET("/reservations", middlewares.AuthorizeRole(constants.RoleAdmin, constants.RoleResident, constants.RoleOwner), services.GetUserReservations)
+	auth.GET("/reservations", middlewares.AuthorizeRole(constants.RoleAdmin, constants.RoleResident, constants.RoleOwner), services.GetReservationHistory)
 
 	// Rota para cancelar reservas (permitindo admin e owner)
 	auth.POST("/reservations/cancel", middlewares.AuthorizeRole(constants.RoleAdmin, constants.RoleResident, constants.RoleOwner), services.CancelReservation)

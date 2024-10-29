@@ -20,63 +20,103 @@ func CreateReservation(c *gin.Context) {
 		return
 	}
 
-	// Verificar se o horário de início é válido
-	startHour := reservation.StartTime.Hour()
-	startMinute := reservation.StartTime.Minute()
-	if startHour < 0 || startHour > 23 || startMinute != 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Horário inválido. Os horários disponíveis são das 10h às 14h, e devem ser em horários fixos (ex.: 10:00, 11:00)."})
+	// Regras para espaços específicos
+	switch reservation.SpaceID {
+	case 1: // Salão de Festas
+		reservation.StartTime = time.Date(reservation.StartTime.Year(), reservation.StartTime.Month(), reservation.StartTime.Day(), 10, 0, 0, 0, reservation.StartTime.Location())
+		reservation.EndTime = reservation.StartTime.Add(time.Hour * 14) // Das 10h até 00h (14 horas de duração)
+
+		var existingReservation models.Reservation
+		err := database.DB.Get(&existingReservation, `
+            SELECT * FROM reservations 
+            WHERE space_id = $1 AND status = $2 
+            AND DATE(start_time) = DATE($3)`,
+			reservation.SpaceID, constants.ReservationStatusConfirmed, reservation.StartTime)
+
+		if err == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "O Salão de Festas já está reservado para este dia."})
+			return
+		}
+
+	case 2: // Brinquedoteca
+		startHour := reservation.StartTime.Hour()
+		if startHour < 8 || startHour >= 22 || reservation.StartTime.Minute() != 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Horário inválido. A Brinquedoteca só permite reservas em horas inteiras das 8h às 22h."})
+			return
+		}
+		reservation.EndTime = reservation.StartTime.Add(time.Hour) // 1 hora de duração
+
+		var existingReservation models.Reservation
+		err := database.DB.Get(&existingReservation, `
+            SELECT * FROM reservations 
+            WHERE space_id = $1 AND start_time = $2 
+            AND status = $3`,
+			reservation.SpaceID, reservation.StartTime, constants.ReservationStatusConfirmed)
+
+		if err == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "A Brinquedoteca já está reservada para esse horário."})
+			return
+		}
+
+	case 3: // Academia
+		if reservation.StartTime.Minute() != 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Horário inválido. A Academia só permite reservas em horários inteiros."})
+			return
+		}
+		reservation.EndTime = reservation.StartTime.Add(time.Hour) // 1 hora de duração
+
+		var existingReservation models.Reservation
+		err := database.DB.Get(&existingReservation, `
+            SELECT * FROM reservations 
+            WHERE space_id = $1 AND start_time = $2 
+            AND status = $3`,
+			reservation.SpaceID, reservation.StartTime, constants.ReservationStatusConfirmed)
+
+		if err == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "A Academia já está reservada para esse horário."})
+			return
+		}
+
+	case 4, 5: // Quiosques
+		startHour := reservation.StartTime.Hour()
+		if !(startHour == 10 && reservation.EndTime.Hour() == 16) && !(startHour == 16 && reservation.EndTime.Hour() == 22) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Os Quiosques só permitem reservas para períodos: manhã (10h-16h) ou tarde (16h-22h)."})
+			return
+		}
+		reservation.EndTime = reservation.StartTime.Add(time.Hour * 6)
+
+	case 6: // Piscina
+		startHour := reservation.StartTime.Hour()
+		if startHour < 9 || startHour >= 22 || reservation.StartTime.Minute() != 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Horário inválido. A Piscina permite reservas em horários inteiros das 9h às 22h."})
+			return
+		}
+		reservation.EndTime = reservation.StartTime.Add(time.Hour) // 1 hora de duração
+	}
+
+	// Verifica se o usuário já possui uma reserva ativa
+	var existingActiveReservation models.Reservation
+	err := database.DB.Get(&existingActiveReservation, `
+        SELECT * FROM reservations 
+        WHERE user_id = $1 
+        AND status = $2 AND end_time > NOW()`,
+		reservation.UserID, constants.ReservationStatusConfirmed)
+
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Você já possui uma reserva ativa."})
 		return
 	}
 
-	// Definir o horário de término como 1 hora após o início
-	reservation.EndTime = reservation.StartTime.Add(time.Hour)
-
-	// Definindo os valores de CreatedAt e UpdatedAt e o status
+	// Configurar informações adicionais da reserva
 	reservation.CreatedAt = time.Now()
 	reservation.UpdatedAt = time.Now()
 	reservation.Status = constants.ReservationStatusConfirmed
 
-	// Log dos dados da reserva recebidos
-	log.Printf("Dados da reserva recebidos: %+v\n", reservation)
-
-	// Verifica se o usuário já possui uma reserva ativa para o mesmo espaço
-	var existingActiveReservation models.Reservation
-	err := database.DB.Get(&existingActiveReservation, `
-		SELECT * FROM reservations 
-		WHERE user_id = $1 AND space_id = $2 
-		AND status = $3 AND end_time > NOW()`,
-		reservation.UserID, reservation.SpaceID, constants.ReservationStatusConfirmed)
-
-	if err == nil {
-		log.Printf("Reserva ativa encontrada: %+v\n", existingActiveReservation)
-		c.JSON(http.StatusConflict, gin.H{"error": "Você já possui uma reserva ativa para este espaço."})
-		return
-	} else {
-		log.Println("Nenhuma reserva ativa encontrada ou erro:", err)
-	}
-
-	// Verifica se já existe uma reserva no mesmo horário (considerando apenas reservas confirmadas)
-	var existingReservation models.Reservation
-	err = database.DB.Get(&existingReservation, `
-		SELECT * FROM reservations 
-		WHERE space_id = $1 
-		AND start_time = $2 
-		AND status = $3`,
-		reservation.SpaceID, reservation.StartTime, constants.ReservationStatusConfirmed)
-
-	if err == nil {
-		log.Printf("Já existe uma reserva para o horário: %+v\n", existingReservation)
-		c.JSON(http.StatusConflict, gin.H{"error": "Já existe uma reserva para a academia nesse horário."})
-		return
-	} else {
-		log.Println("Nenhuma reserva existente encontrada ou erro:", err)
-	}
-
 	// Inserir a reserva no banco de dados
 	_, err = database.DB.NamedExec(`
-		INSERT INTO reservations (user_id, space_id, start_time, end_time, status, created_at, updated_at) 
-		VALUES (:user_id, :space_id, :start_time, :end_time, :status, :created_at, :updated_at)
-	`, &reservation)
+        INSERT INTO reservations (user_id, space_id, start_time, end_time, status, created_at, updated_at) 
+        VALUES (:user_id, :space_id, :start_time, :end_time, :status, :created_at, :updated_at)
+    `, &reservation)
 	if err != nil {
 		log.Println("Erro ao criar reserva:", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao criar reserva"})
@@ -86,8 +126,8 @@ func CreateReservation(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "Reserva criada com sucesso"})
 }
 
-// Função para obter as reservas de um usuário
-func GetUserReservations(c *gin.Context) {
+// Função para obter o histórico de reservas de um usuário
+func GetReservationHistory(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
 		log.Println("ID do usuário não encontrado no contexto")
@@ -96,10 +136,15 @@ func GetUserReservations(c *gin.Context) {
 	}
 
 	var reservations []models.Reservation
-	err := database.DB.Select(&reservations, "SELECT * FROM reservations WHERE user_id = $1", userID)
+	err := database.DB.Select(&reservations, `
+        SELECT * FROM reservations 
+        WHERE user_id = $1 
+        ORDER BY start_time DESC
+    `, userID)
+
 	if err != nil {
-		log.Println("Erro ao obter reservas:", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao obter reservas"})
+		log.Println("Erro ao obter histórico de reservas:", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao obter histórico de reservas"})
 		return
 	}
 
@@ -131,10 +176,10 @@ func CancelReservation(c *gin.Context) {
 		}
 
 		err := database.DB.Get(&reservation, `
-			SELECT * FROM reservations 
-			WHERE user_id = (SELECT id FROM users WHERE cpf = $1) AND space_id = $2 
-			AND status = $3 AND start_time > NOW() 
-			ORDER BY created_at DESC LIMIT 1`, requestBody.CPF, requestBody.SpaceID, constants.ReservationStatusConfirmed)
+            SELECT * FROM reservations 
+            WHERE user_id = (SELECT id FROM users WHERE cpf = $1) AND space_id = $2 
+            AND status = $3 AND start_time > NOW() 
+            ORDER BY created_at DESC LIMIT 1`, requestBody.CPF, requestBody.SpaceID, constants.ReservationStatusConfirmed)
 
 		if err != nil {
 			log.Println("Erro ao encontrar a reserva:", err)
@@ -151,9 +196,9 @@ func CancelReservation(c *gin.Context) {
 		}
 
 		err := database.DB.Get(&reservation, `
-			SELECT * FROM reservations 
-			WHERE user_id = $1 AND space_id = $2 AND status = $3 AND start_time > NOW() 
-			ORDER BY created_at DESC LIMIT 1`, userID, requestBody.SpaceID, constants.ReservationStatusConfirmed)
+            SELECT * FROM reservations 
+            WHERE user_id = $1 AND space_id = $2 AND status = $3 AND start_time > NOW() 
+            ORDER BY created_at DESC LIMIT 1`, userID, requestBody.SpaceID, constants.ReservationStatusConfirmed)
 
 		if err != nil {
 			log.Println("Erro ao encontrar a reserva:", err)
@@ -167,8 +212,8 @@ func CancelReservation(c *gin.Context) {
 
 	// Atualizar a reserva no banco de dados
 	_, err := database.DB.NamedExec(`
-		UPDATE reservations SET status = :status, updated_at = :updated_at WHERE id = :id
-	`, map[string]interface{}{
+        UPDATE reservations SET status = :status, updated_at = :updated_at WHERE id = :id
+    `, map[string]interface{}{
 		"status":     reservation.Status,
 		"updated_at": time.Now(),
 		"id":         reservation.ID,
